@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>유로핀 상담 관리 시스템</title>
+<style>
+/* ── 폰트 ── */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
+
+/* ── CSS 변수 ── */
+:root {
+  --bg:       #0f1117;
+  --surface:  #181c27;
+  --surface2: #1f2436;
+  --border:   #2a3050;
+  --accent:   #4f8ef7;
+  --accent2:  #7c5cfc;
+  --text:     #e2e8f8;
+  --text2:    #8892b0;
+  --danger:   #f76b6b;
+  --success:  #4fd1a0;
+  --warning:  #f7c44f;
+
+  --status-received:   #4f8ef7;
+  --status-evaluating: #7c5cfc;
+  --status-bep_sent:   #f7c44f;
+  --status-testing:    #f7894f;
+  --status-reporting:  #4fd1a0;
+  --status-closed:     #8892b0;
+
+  --radius: 10px;
+  --font: 'Noto Sans KR', sans-serif;
+  --mono: 'DM Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 상단 바 ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  height: 56px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar-logo {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.topbar-logo span { color: var(--text2); font-weight: 300; }
+.topbar-spacer { flex: 1; }
+
+/* 담당자 선택 */
+.actor-wrap { display: flex; align-items: center; gap: 8px; }
+.actor-label { font-size: 12px; color: var(--text2); }
+.actor-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: var(--font);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* 동기화 상태 */
+.sync-badge {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text2);
+  font-family: var(--mono);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  transition: all 0.3s;
+}
+.sync-badge.syncing { color: var(--warning); border-color: var(--warning); }
+.sync-badge.ok      { color: var(--success); border-color: var(--success); }
+.sync-badge.err     { color: var(--danger);  border-color: var(--danger); }
+.sync-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor;
+}
+.sync-badge.syncing .sync-dot { animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* 새로고침 버튼 */
+.btn-refresh {
+  background: none; border: 1px solid var(--border);
+  color: var(--text2); border-radius: 6px;
+  padding: 4px 10px; cursor: pointer; font-size: 12px;
+  transition: all 0.2s;
+}
+.btn-refresh:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── 레이아웃 ── */
+.layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  height: calc(100vh - 56px);
+}
+
+/* 사이드바 */
+.sidebar {
+  width: 340px; min-width: 280px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-head {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.sidebar-title {
+  font-size: 12px; font-weight: 500; color: var(--text2);
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+.stats-row {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+.stat-box {
+  background: var(--surface2);
+  border-radius: var(--radius);
+  padding: 10px 8px;
+  text-align: center;
+}
+.stat-num  { font-size: 22px; font-weight: 700; font-family: var(--mono); }
+.stat-label{ font-size: 10px; color: var(--text2); margin-top: 2px; }
+
+/* 검색 + 필터 */
+.search-wrap { position: relative; }
+.search-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 8px 12px 8px 32px;
+  font-family: var(--font); font-size: 13px;
+  transition: border-color 0.2s;
+}
+.search-input:focus { outline: none; border-color: var(--accent); }
+.search-icon {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  color: var(--text2); font-size: 13px; pointer-events: none;
+}
+.filter-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.chip {
+  font-size: 11px; padding: 3px 9px; border-radius: 20px; cursor: pointer;
+  border: 1px solid var(--border); color: var(--text2);
+  transition: all 0.15s; white-space: nowrap;
+}
+.chip.active { color: #fff; border-color: transparent; }
+.chip[data-s="all"].active    { background: var(--accent); }
+.chip[data-s="received"].active    { background: var(--status-received); }
+.chip[data-s="evaluating"].active  { background: var(--status-evaluating); }
+.chip[data-s="bep_sent"].active    { background: var(--status-bep_sent);   color:#000; }
+.chip[data-s="testing"].active     { background: var(--status-testing); }
+.chip[data-s="reporting"].active   { background: var(--status-reporting);  color:#000; }
+.chip[data-s="closed"].active      { background: var(--status-closed); }
+
+/* 케이스 목록 */
+.case-list {
+  flex: 1; overflow-y: auto;
+  padding: 8px;
+}
+.case-list::-webkit-scrollbar { width: 4px; }
+.case-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.case-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  cursor: pointer;
+  margin-bottom: 6px;
+  transition: border-color 0.15s, background 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+.case-card::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--status-received);
+  transition: background 0.2s;
+}
+.case-card[data-s="evaluating"]::before { background: var(--status-evaluating); }
+.case-card[data-s="bep_sent"]::before   { background: var(--status-bep_sent); }
+.case-card[data-s="testing"]::before    { background: var(--status-testing); }
+.case-card[data-s="reporting"]::before  { background: var(--status-reporting); }
+.case-card[data-s="closed"]::before     { background: var(--status-closed); }
+
+.case-card:hover, .case-card.active {
+  border-color: var(--accent);
+  background: #1e2540;
+}
+.case-card-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.case-company { font-weight: 700; font-size: 14px; }
+.status-pill {
+  font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 10px;
+  background: var(--border); color: var(--text2);
+}
+.status-pill[data-s="received"]   { background: rgba(79,142,247,0.2); color: var(--status-received); }
+.status-pill[data-s="evaluating"] { background: rgba(124,92,252,0.2); color: var(--status-evaluating); }
+.status-pill[data-s="bep_sent"]   { background: rgba(247,196,79,0.2); color: var(--status-bep_sent); }
+.status-pill[data-s="testing"]    { background: rgba(247,137,79,0.2); color: var(--status-testing); }
+.status-pill[data-s="reporting"]  { background: rgba(79,209,160,0.2); color: var(--status-reporting); }
+.status-pill[data-s="closed"]     { background: rgba(136,146,176,0.15); color: var(--status-closed); }
+
+.case-scope   { font-size: 12px; color: var(--text2); margin-bottom: 6px; }
+.case-meta    { display: flex; gap: 8px; }
+.case-meta-item { font-size: 10px; color: var(--text2); font-family: var(--mono); }
+
+/* 진행률 바 */
+.progress-bar {
+  height: 3px; background: var(--border); border-radius: 2px; margin-top: 8px;
+}
+.progress-fill {
+  height: 100%; border-radius: 2px; background: var(--accent);
+  transition: width 0.4s;
+}
+
+/* 새 케이스 버튼 */
+.btn-new {
+  margin: 10px;
+  padding: 10px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--accent);
+  color: var(--accent);
+  background: rgba(79,142,247,0.06);
+  cursor: pointer; font-size: 13px; font-family: var(--font);
+  width: calc(100% - 20px);
+  transition: all 0.2s;
+}
+.btn-new:hover { background: rgba(79,142,247,0.12); }
+
+/* ── 메인 패널 ── */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.main::-webkit-scrollbar { width: 4px; }
+.main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* 빈 상태 */
+.empty-state {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: var(--text2); gap: 12px; text-align: center;
+}
+.empty-icon { font-size: 48px; opacity: 0.4; }
+.empty-title { font-size: 18px; font-weight: 500; }
+.empty-sub { font-size: 13px; }
+
+/* 섹션 카드 */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.card-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.card-title { font-weight: 700; font-size: 14px; }
+.card-body { padding: 18px; }
+
+/* 상세 그리드 */
+.detail-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.detail-field label {
+  display: block; font-size: 11px; color: var(--text2);
+  margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.field-val {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px; font-size: 13px;
+  min-height: 34px;
+}
+input.field-val, select.field-val, textarea.field-val {
+  width: 100%; color: var(--text); font-family: var(--font);
+}
+input.field-val:focus, select.field-val:focus, textarea.field-val:focus {
+  outline: none; border-color: var(--accent);
+}
+select.field-val { cursor: pointer; }
+textarea.field-val { resize: vertical; min-height: 72px; }
+
+/* 상태 셀렉터 */
+.status-selector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.status-option {
+  padding: 8px 6px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border); text-align: center;
+  font-size: 11px; color: var(--text2); transition: all 0.15s;
+}
+.status-option:hover, .status-option.active {
+  border-color: transparent; color: #fff;
+}
+.status-option[data-s="received"].active   { background: var(--status-received); }
+.status-option[data-s="evaluating"].active { background: var(--status-evaluating); }
+.status-option[data-s="bep_sent"].active   { background: var(--status-bep_sent); color:#000; }
+.status-option[data-s="testing"].active    { background: var(--status-testing); }
+.status-option[data-s="reporting"].active  { background: var(--status-reporting); color:#000; }
+.status-option[data-s="closed"].active     { background: var(--status-closed); }
+
+/* 인보이스 그리드 */
+.invoice-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+}
+.invoice-section-title {
+  font-size: 11px; font-weight: 700; color: var(--text2);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  grid-column: 1 / -1; padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.invoice-section-title:first-child { border-top: none; }
+
+/* 이력 타임라인 */
+.timeline { display: flex; flex-direction: column; gap: 0; }
+.timeline-item {
+  display: flex; gap: 14px; position: relative; padding-bottom: 16px;
+}
+.timeline-item::before {
+  content: '';
+  position: absolute; left: 14px; top: 24px; bottom: 0;
+  width: 1px; background: var(--border);
+}
+.timeline-item:last-child::before { display: none; }
+.tl-dot {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--surface2); border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; flex-shrink: 0; color: var(--text2);
+}
+.tl-body { flex: 1; }
+.tl-head { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.tl-step { font-weight: 600; font-size: 13px; }
+.tl-actor { font-size: 11px; color: var(--accent); }
+.tl-date { font-size: 11px; color: var(--text2); font-family: var(--mono); margin-left: auto; }
+.tl-note { font-size: 12px; color: var(--text2); }
+
+/* 이력 추가 폼 */
+.hist-form {
+  display: grid; grid-template-columns: 2fr 1fr; gap: 8px; margin-top: 12px;
+}
+.hist-form .full { grid-column: 1 / -1; }
+
+/* 버튼 */
+.btn {
+  padding: 8px 16px; border-radius: 7px; cursor: pointer;
+  font-family: var(--font); font-size: 13px; font-weight: 500;
+  border: none; transition: all 0.2s;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #3a7de0; }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent); }
+.btn-danger { background: rgba(247,107,107,0.15); color: var(--danger); border: 1px solid rgba(247,107,107,0.3); }
+.btn-danger:hover { background: rgba(247,107,107,0.25); }
+.btn-sm { padding: 5px 11px; font-size: 12px; }
+.btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* 드롭다운 빠른 추가 */
+.quick-steps {
+  display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px;
+}
+.quick-step {
+  font-size: 10px; padding: 3px 8px; border-radius: 12px;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text2); cursor: pointer;
+  transition: all 0.15s;
+}
+.quick-step:hover { border-color: var(--accent); color: var(--accent); }
+
+/* 모달 오버레이 */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(10,12,20,0.75);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: auto; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  width: 560px; max-width: 95vw; max-height: 90vh;
+  overflow-y: auto;
+  transform: translateY(16px);
+  transition: transform 0.2s;
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+.modal-head {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-title { font-weight: 700; font-size: 15px; }
+.modal-close {
+  background: none; border: none; color: var(--text2);
+  font-size: 18px; cursor: pointer; line-height: 1; padding: 2px 6px;
+  border-radius: 4px;
+}
+.modal-close:hover { color: var(--text); background: var(--surface2); }
+.modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+
+/* 토스트 */
+.toast-wrap {
+  position: fixed; bottom: 20px; right: 20px;
+  display: flex; flex-direction: column; gap: 8px;
+  z-index: 999;
+}
+.toast {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 16px;
+  font-size: 13px; color: var(--text);
+  animation: slideIn 0.3s ease;
+  max-width: 320px;
+}
+.toast.ok  { border-color: var(--success); color: var(--success); }
+.toast.err { border-color: var(--danger);  color: var(--danger); }
+@keyframes slideIn {
+  from { opacity:0; transform: translateX(20px); }
+  to   { opacity:1; transform: translateX(0); }
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .layout { flex-direction: column; height: auto; }
+  .sidebar { width: 100%; min-width: unset; height: auto; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .invoice-grid { grid-template-columns: 1fr; }
+  .status-selector { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- ── 상단 바 ── -->
+<header class="topbar">
+  <div class="topbar-logo">EUROFINS <span>상담 관리</span></div>
+  <div class="topbar-spacer"></div>
+  <div class="actor-wrap">
+    <span class="actor-label">담당자</span>
+    <select class="actor-select" id="actorSelect">
+      <option value="">선택…</option>
+    </select>
+  </div>
+  <div class="sync-badge" id="syncBadge">
+    <div class="sync-dot"></div>
+    <span id="syncText">대기 중</span>
+  </div>
+  <button class="btn-refresh" onclick="loadCases()">↻ 새로고침</button>
+</header>
+
+<!-- ── 본문 ── -->
+<div class="layout">
+
+  <!-- 사이드바 -->
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <div class="sidebar-title">케이스 목록</div>
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="stat-num" id="statTotal">0</div>
+          <div class="stat-label">전체</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="statActive" style="color:var(--accent)">0</div>
+          <div class="stat-label">진행 중</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="statClosed" style="color:var(--text2)">0</div>
+          <div class="stat-label">종료</div>
+        </div>
+      </div>
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input class="search-input" id="searchInput" placeholder="업체명·의뢰내용 검색…" oninput="renderList()" />
+      </div>
+      <div class="filter-chips">
+        <div class="chip active" data-s="all"    onclick="setFilter('all')">전체</div>
+        <div class="chip" data-s="received"      onclick="setFilter('received')">📥 접수</div>
+        <div class="chip" data-s="evaluating"    onclick="setFilter('evaluating')">🔬 평가</div>
+        <div class="chip" data-s="bep_sent"      onclick="setFilter('bep_sent')">📋 BEP</div>
+        <div class="chip" data-s="testing"       onclick="setFilter('testing')">⚗️ 시험</div>
+        <div class="chip" data-s="reporting"     onclick="setFilter('reporting')">📊 결과</div>
+        <div class="chip" data-s="closed"        onclick="setFilter('closed')">✅ 종료</div>
+      </div>
+    </div>
+    <div class="case-list" id="caseList"></div>
+    <button class="btn-new" onclick="openNewModal()">＋ 새 상담 등록</button>
+  </aside>
+
+  <!-- 메인 패널 -->
+  <main class="main" id="mainPanel">
+    <div class="empty-state">
+      <div class="empty-icon">📋</div>
+      <div class="empty-title">케이스를 선택하세요</div>
+      <div class="empty-sub">왼쪽 목록에서 케이스를 클릭하거나<br>새 상담을 등록하세요.</div>
+    </div>
+  </main>
+</div>
+
+<!-- ── 새 케이스 모달 ── -->
+<div class="modal-overlay" id="newModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">새 상담 등록</div>
+      <button class="modal-close" onclick="closeModal('newModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid">
+        <div class="detail-field">
+          <label>의뢰사 *</label>
+          <input class="field-val" id="new_company" placeholder="예: 제테마" />
+        </div>
+        <div class="detail-field">
+          <label>담당자 (의뢰사)</label>
+          <input class="field-val" id="new_contact_person" placeholder="예: 이신구" />
+        </div>
+        <div class="detail-field" style="grid-column:1/-1">
+          <label>의뢰 내용 *</label>
+          <input class="field-val" id="new_scope" placeholder="예: BEP&amp;BER, TRA" />
+        </div>
+        <div class="detail-field">
+          <label>접촉 유형</label>
+          <select class="field-val" id="new_contact_type">
+            <option value="">선택</option>
+            <option>표면 접촉</option>
+            <option>외부 통로 접촉</option>
+            <option>이식형</option>
+            <option>혈액 접촉</option>
+          </select>
+        </div>
+        <div class="detail-field">
+          <label>접촉 기간</label>
+          <select class="field-val" id="new_duration">
+            <option value="">선택</option>
+            <option value="A">A (≤24시간)</option>
+            <option value="B">B (24h~30일)</option>
+            <option value="C">C (&gt;30일)</option>
+          </select>
+        </div>
+        <div class="detail-field" style="grid-column:1/-1">
+          <label>재료</label>
+          <input class="field-val" id="new_materials" placeholder="예: Silicone, PET" />
+        </div>
+        <div class="detail-field" style="grid-column:1/-1">
+          <label>비고</label>
+          <textarea class="field-val" id="new_note" rows="3"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('newModal')">취소</button>
+      <button class="btn btn-primary" onclick="submitNewCase()">등록</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 토스트 컨테이너 ── -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- ════════════════════════════════════════════
+     JavaScript
+════════════════════════════════════════════ -->
+<script>
+// ────────────────────────────────────────────
+// 0. 설정 — 여기만 수정하세요
+// ────────────────────────────────────────────
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzr3ADUFHMS5t5rbK41Rh601Jai_JGX75XllAM5Sr1uCT7Sk0IDiyhkf1PVooemt053/exec';  // ← Apps Script 웹앱 배포 URL
+
+const TEAM_MEMBERS = ['김담당', '박팀장', '이사원', '최과장'];  // ← 팀원 이름 목록
+
+const STATUS_LABELS = {
+  received:   '📥 접수',
+  evaluating: '🔬 평가 중',
+  bep_sent:   '📋 BEP 송부',
+  testing:    '⚗️ 시험 중',
+  reporting:  '📊 결과 회신',
+  closed:     '✅ 종료',
+};
+
+const QUICK_STEPS = [
+  '의뢰 수신','Questionnaire 작성 요청','Questionnaire 수신',
+  'Questionnaire 전달','견적서·TMDS 수신','견적서·TMDS 전달',
+  '견적서 서명본·TMDS 수신','견적서 서명본·TMDS 전달',
+  '시료 발송','시험 계획서 수신','invoice(선금) due date',
+  '납입 확인(선금)','최종보고서(안) 수신','최종보고서(최종) 수신',
+  '최종invoice(잔금) due date','납입 확인(잔금)',
+];
+
+// ────────────────────────────────────────────
+// 1. 상태
+// ────────────────────────────────────────────
+let cases    = [];
+let history  = {};   // { caseId: [...] }
+let activeId = null;
+let filterStatus = 'all';
+
+// 담당자 초기화
+const actorSelect = document.getElementById('actorSelect');
+TEAM_MEMBERS.forEach(m => {
+  const opt = document.createElement('option');
+  opt.value = opt.textContent = m;
+  actorSelect.appendChild(opt);
+});
+const savedActor = localStorage.getItem('eurofins.actor');
+if (savedActor) actorSelect.value = savedActor;
+actorSelect.addEventListener('change', () => {
+  localStorage.setItem('eurofins.actor', actorSelect.value);
+});
+function currentActor() { return actorSelect.value || '미지정'; }
+
+// ────────────────────────────────────────────
+// 2. API 통신
+// ────────────────────────────────────────────
+function setSyncState(state, msg) {
+  const badge = document.getElementById('syncBadge');
+  const text  = document.getElementById('syncText');
+  badge.className = 'sync-badge ' + state;
+  text.textContent = msg;
+}
+
+async function apiGet(params) {
+  const url = GAS_URL + '?' + new URLSearchParams(params).toString();
+  const res = await fetch(url, { redirect: 'follow' });
+  return res.json();
+}
+
+async function apiPost(action, payload) {
+  const res = await fetch(GAS_URL, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action, payload }),
+  });
+  return res.json();
+}
+
+// ────────────────────────────────────────────
+// 3. 데이터 로드
+// ────────────────────────────────────────────
+async function loadCases() {
+  setSyncState('syncing', '동기화 중…');
+  try {
+    const data = await apiGet({ action: 'getCases' });
+    if (data.error) throw new Error(data.error);
+    cases = data;
+    // 로컬 캐시
+    localStorage.setItem('eurofins.cases', JSON.stringify(cases));
+    renderList();
+    updateStats();
+    setSyncState('ok', '동기화 완료');
+    if (activeId) renderDetail(activeId);
+  } catch (e) {
+    // 오프라인 시 캐시 사용
+    const cached = localStorage.getItem('eurofins.cases');
+    if (cached) {
+      cases = JSON.parse(cached);
+      renderList();
+      updateStats();
+      setSyncState('err', '오프라인 (캐시)');
+      toast('⚠️ 서버 연결 실패 — 캐시 데이터를 표시합니다', 'err');
+    } else {
+      setSyncState('err', '연결 오류');
+      toast('서버 연결 실패: ' + e.message, 'err');
+    }
+  }
+}
+
+async function loadHistory(caseId) {
+  try {
+    const data = await apiGet({ action: 'getHistory', caseId });
+    if (!data.error) {
+      history[caseId] = data;
+      localStorage.setItem('eurofins.hist.' + caseId, JSON.stringify(data));
+    }
+  } catch (_) {
+    const cached = localStorage.getItem('eurofins.hist.' + caseId);
+    if (cached) history[caseId] = JSON.parse(cached);
+  }
+  renderTimeline(caseId);
+}
+
+// ────────────────────────────────────────────
+// 4. 렌더 — 목록
+// ────────────────────────────────────────────
+function setFilter(s) {
+  filterStatus = s;
+  document.querySelectorAll('.chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.s === s)
+  );
+  renderList();
+}
+
+function renderList() {
+  const q    = document.getElementById('searchInput').value.toLowerCase();
+  const list = document.getElementById('caseList');
+  const filtered = cases.filter(c => {
+    const matchQ = !q || c.company?.toLowerCase().includes(q) || c.scope?.toLowerCase().includes(q);
+    const matchS = filterStatus === 'all' || c.status === filterStatus;
+    return matchQ && matchS;
+  });
+
+  list.innerHTML = filtered.length === 0
+    ? '<div style="padding:20px;text-align:center;color:var(--text2);font-size:13px">검색 결과 없음</div>'
+    : filtered.map(c => `
+      <div class="case-card${c.case_id === activeId ? ' active' : ''}"
+           data-s="${c.status}"
+           onclick="selectCase('${c.case_id}')">
+        <div class="case-card-top">
+          <span class="case-company">${esc(c.company)}</span>
+          <span class="status-pill" data-s="${c.status}">${STATUS_LABELS[c.status] ?? c.status}</span>
+        </div>
+        <div class="case-scope">${esc(c.scope || '—')}</div>
+        <div class="case-meta">
+          <span class="case-meta-item">${esc(c.owner || '—')}</span>
+          <span class="case-meta-item">${c.created_at ? c.created_at.slice(0,10) : ''}</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:${(Number(c.progress)||0)*100}%"></div>
+        </div>
+      </div>`).join('');
+}
+
+function updateStats() {
+  document.getElementById('statTotal').textContent  = cases.length;
+  document.getElementById('statActive').textContent = cases.filter(c => c.status !== 'closed').length;
+  document.getElementById('statClosed').textContent = cases.filter(c => c.status === 'closed').length;
+}
+
+// ────────────────────────────────────────────
+// 5. 케이스 선택 + 상세 렌더
+// ────────────────────────────────────────────
+function selectCase(id) {
+  activeId = id;
+  renderList();
+  renderDetail(id);
+  loadHistory(id);
+}
+
+function findCase(id) { return cases.find(c => c.case_id === id); }
+
+function renderDetail(id) {
+  const c = findCase(id);
+  if (!c) return;
+
+  document.getElementById('mainPanel').innerHTML = `
+    <!-- 헤더 -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:22px;font-weight:700">${esc(c.company)}</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:4px">${esc(c.scope||'')}</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary btn-sm" onclick="saveDetailEdits('${id}')">💾 저장</button>
+        <button class="btn btn-danger btn-sm"    onclick="confirmDelete('${id}')">🗑 삭제</button>
+      </div>
+    </div>
+
+    <!-- 기본 정보 -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">기본 정보</span></div>
+      <div class="card-body">
+        <div class="detail-grid">
+          <div class="detail-field">
+            <label>의뢰사</label>
+            <input class="field-val" id="d_company" value="${esc(c.company||'')}" />
+          </div>
+          <div class="detail-field">
+            <label>의뢰사 담당자</label>
+            <input class="field-val" id="d_contact_person" value="${esc(c.contact_person||'')}" />
+          </div>
+          <div class="detail-field" style="grid-column:1/-1">
+            <label>의뢰 내용</label>
+            <input class="field-val" id="d_scope" value="${esc(c.scope||'')}" />
+          </div>
+          <div class="detail-field">
+            <label>접촉 유형</label>
+            <input class="field-val" id="d_contact_type" value="${esc(c.contact_type||'')}" />
+          </div>
+          <div class="detail-field">
+            <label>접촉 기간</label>
+            <select class="field-val" id="d_duration">
+              <option value="">선택</option>
+              ${['A','B','C'].map(v=>`<option${c.duration===v?' selected':''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div class="detail-field">
+            <label>재료</label>
+            <input class="field-val" id="d_materials" value="${esc(c.materials||'')}" />
+          </div>
+          <div class="detail-field">
+            <label>담당자 (내부)</label>
+            <input class="field-val" id="d_owner" value="${esc(c.owner||'')}" />
+          </div>
+          <div class="detail-field" style="grid-column:1/-1">
+            <label>비고</label>
+            <textarea class="field-val" id="d_note" rows="3">${esc(c.note||'')}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 상태 -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">진행 상태</span></div>
+      <div class="card-body">
+        <div class="status-selector" id="statusSelector">
+          ${Object.entries(STATUS_LABELS).map(([k,v])=>`
+            <div class="status-option${c.status===k?' active':''}"
+                 data-s="${k}" onclick="changeStatus('${id}','${k}')">
+              ${v}
+            </div>`).join('')}
+        </div>
+        <div style="margin-top:14px">
+          <div style="font-size:11px;color:var(--text2);margin-bottom:6px">진행률</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="progress-bar" style="flex:1;height:8px">
+              <div class="progress-fill" id="detailProgress"
+                   style="width:${(Number(c.progress)||0)*100}%;height:100%"></div>
+            </div>
+            <span style="font-family:var(--mono);font-size:13px;color:var(--text2)"
+                  id="progressPct">${Math.round((Number(c.progress)||0)*100)}%</span>
+            <input type="range" min="0" max="100" value="${Math.round((Number(c.progress)||0)*100)}"
+                   style="width:120px;accent-color:var(--accent)"
+                   oninput="updateProgress('${id}',this.value)" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 인보이스 / 입금 추적 -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">💰 인보이스 &amp; 입금 추적</span></div>
+      <div class="card-body">
+        <div class="invoice-grid">
+          <div class="invoice-section-title">선금</div>
+          <div class="detail-field">
+            <label>인보이스 금액</label>
+            <input class="field-val" id="d_invoice_advance_amount" type="number"
+                   value="${c.invoice_advance_amount||''}" placeholder="0" />
+          </div>
+          <div class="detail-field">
+            <label>인보이스 발행일</label>
+            <input class="field-val" id="d_invoice_advance_date" type="date"
+                   value="${c.invoice_advance_date||''}" />
+          </div>
+          <div class="detail-field">
+            <label>납입 확인일</label>
+            <input class="field-val" id="d_payment_advance_date" type="date"
+                   value="${c.payment_advance_date||''}" />
+          </div>
+          <div></div>
+          <div class="invoice-section-title">잔금</div>
+          <div class="detail-field">
+            <label>인보이스 금액</label>
+            <input class="field-val" id="d_invoice_final_amount" type="number"
+                   value="${c.invoice_final_amount||''}" placeholder="0" />
+          </div>
+          <div class="detail-field">
+            <label>인보이스 발행일</label>
+            <input class="field-val" id="d_invoice_final_date" type="date"
+                   value="${c.invoice_final_date||''}" />
+          </div>
+          <div class="detail-field">
+            <label>납입 확인일</label>
+            <input class="field-val" id="d_payment_final_date" type="date"
+                   value="${c.payment_final_date||''}" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 진행 이력 -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">📁 진행 이력</span></div>
+      <div class="card-body">
+        <div id="timelineWrap">
+          <div style="color:var(--text2);font-size:13px">이력 로딩 중…</div>
+        </div>
+
+        <!-- 이력 추가 폼 -->
+        <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:500">이력 추가</div>
+          <div class="hist-form">
+            <div class="detail-field">
+              <label>단계명</label>
+              <input class="field-val" id="hist_step" placeholder="단계명 입력 또는 아래 빠른 추가 클릭" />
+            </div>
+            <div class="detail-field">
+              <label>날짜</label>
+              <input class="field-val" id="hist_date" type="date"
+                     value="${new Date().toISOString().slice(0,10)}" />
+            </div>
+            <div class="detail-field full">
+              <label>코멘트</label>
+              <input class="field-val" id="hist_note" placeholder="추가 설명 (선택)" />
+            </div>
+          </div>
+          <!-- 16단계 빠른 추가 -->
+          <div class="quick-steps" id="quickSteps">
+            ${QUICK_STEPS.map(s=>`
+              <div class="quick-step" onclick="setStep(this)">${s}</div>
+            `).join('')}
+          </div>
+          <div class="btn-row" style="margin-top:10px">
+            <button class="btn btn-primary btn-sm" onclick="addHistory('${id}')">이력 추가</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ────────────────────────────────────────────
+// 6. 이력 렌더
+// ────────────────────────────────────────────
+function renderTimeline(id) {
+  const wrap = document.getElementById('timelineWrap');
+  if (!wrap) return;
+  const hist = history[id] || [];
+  if (hist.length === 0) {
+    wrap.innerHTML = '<div style="color:var(--text2);font-size:13px">아직 이력이 없습니다.</div>';
+    return;
+  }
+  wrap.innerHTML = `
+    <div class="timeline">
+      ${hist.map((h,i) => `
+        <div class="timeline-item">
+          <div class="tl-dot">${h.seq}</div>
+          <div class="tl-body">
+            <div class="tl-head">
+              <span class="tl-step">${esc(h.step||'')}</span>
+              <span class="tl-actor">${esc(h.actor||'')}</span>
+              <span class="tl-date">${h.date||''}</span>
+            </div>
+            ${h.note ? `<div class="tl-note">${esc(h.note)}</div>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+// ────────────────────────────────────────────
+// 7. 액션
+// ────────────────────────────────────────────
+function setStep(el) {
+  document.getElementById('hist_step').value = el.textContent.trim();
+}
+
+async function addHistory(caseId) {
+  const step = document.getElementById('hist_step').value.trim();
+  const note = document.getElementById('hist_note').value.trim();
+  const date = document.getElementById('hist_date').value;
+  if (!step) { toast('단계명을 입력하세요', 'err'); return; }
+
+  setSyncState('syncing', '저장 중…');
+  try {
+    const res = await apiPost('appendHistory', {
+      caseId, step, note, date,
+      actor: currentActor()
+    });
+    if (res.error) throw new Error(res.error);
+    if (!history[caseId]) history[caseId] = [];
+    history[caseId].push(res.log);
+    localStorage.setItem('eurofins.hist.' + caseId, JSON.stringify(history[caseId]));
+    document.getElementById('hist_step').value = '';
+    document.getElementById('hist_note').value = '';
+    renderTimeline(caseId);
+    setSyncState('ok', '저장됨');
+    toast('이력이 추가되었습니다', 'ok');
+  } catch (e) {
+    setSyncState('err', '오류');
+    toast('이력 추가 실패: ' + e.message, 'err');
+  }
+}
+
+async function changeStatus(caseId, newStatus) {
+  const c = findCase(caseId);
+  if (!c) return;
+
+  // UI 즉시 반영 (낙관적 업데이트)
+  c.status = newStatus;
+  document.querySelectorAll('.status-option').forEach(el =>
+    el.classList.toggle('active', el.dataset.s === newStatus)
+  );
+
+  setSyncState('syncing', '저장 중…');
+  try {
+    const res = await apiPost('updateCase', { case_id: caseId, status: newStatus });
+    if (res.error) throw new Error(res.error);
+    Object.assign(c, res.case);
+
+    // 상태 변경 이력 자동 추가
+    await apiPost('appendHistory', {
+      caseId, step: '상태 변경 → ' + STATUS_LABELS[newStatus],
+      actor: currentActor(),
+      date: new Date().toISOString().slice(0,10)
+    });
+    await loadHistory(caseId);
+
+    renderList();
+    setSyncState('ok', '저장됨');
+    toast('상태가 변경되었습니다: ' + STATUS_LABELS[newStatus], 'ok');
+  } catch (e) {
+    setSyncState('err', '오류');
+    toast('상태 변경 실패: ' + e.message, 'err');
+  }
+}
+
+function updateProgress(caseId, val) {
+  document.getElementById('detailProgress').style.width = val + '%';
+  document.getElementById('progressPct').textContent = val + '%';
+  const c = findCase(caseId);
+  if (c) c.progress = val / 100;
+}
+
+async function saveDetailEdits(caseId) {
+  const g = id => document.getElementById(id)?.value ?? '';
+  const payload = {
+    case_id: caseId,
+    company:               g('d_company'),
+    contact_person:        g('d_contact_person'),
+    scope:                 g('d_scope'),
+    contact_type:          g('d_contact_type'),
+    duration:              g('d_duration'),
+    materials:             g('d_materials'),
+    owner:                 g('d_owner'),
+    note:                  g('d_note'),
+    progress:              findCase(caseId)?.progress ?? 0,
+    invoice_advance_amount:g('d_invoice_advance_amount'),
+    invoice_advance_date:  g('d_invoice_advance_date'),
+    payment_advance_date:  g('d_payment_advance_date'),
+    invoice_final_amount:  g('d_invoice_final_amount'),
+    invoice_final_date:    g('d_invoice_final_date'),
+    payment_final_date:    g('d_payment_final_date'),
+  };
+
+  setSyncState('syncing', '저장 중…');
+  try {
+    const res = await apiPost('updateCase', payload);
+    if (res.error) throw new Error(res.error);
+    const idx = cases.findIndex(c => c.case_id === caseId);
+    if (idx !== -1) cases[idx] = res.case;
+    localStorage.setItem('eurofins.cases', JSON.stringify(cases));
+    renderList();
+    setSyncState('ok', '저장됨');
+    toast('변경사항이 저장되었습니다', 'ok');
+  } catch (e) {
+    setSyncState('err', '오류');
+    toast('저장 실패: ' + e.message, 'err');
+  }
+}
+
+async function confirmDelete(caseId) {
+  const c = findCase(caseId);
+  if (!confirm(`"${c?.company}" 케이스를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+
+  setSyncState('syncing', '삭제 중…');
+  try {
+    const res = await apiPost('deleteCase', { caseId });
+    if (res.error) throw new Error(res.error);
+    cases = cases.filter(c => c.case_id !== caseId);
+    localStorage.setItem('eurofins.cases', JSON.stringify(cases));
+    activeId = null;
+    renderList();
+    updateStats();
+    document.getElementById('mainPanel').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🗑</div>
+        <div class="empty-title">케이스가 삭제되었습니다</div>
+      </div>`;
+    setSyncState('ok', '삭제 완료');
+    toast('케이스가 삭제되었습니다', 'ok');
+  } catch (e) {
+    setSyncState('err', '오류');
+    toast('삭제 실패: ' + e.message, 'err');
+  }
+}
+
+// ────────────────────────────────────────────
+// 8. 새 케이스 등록
+// ────────────────────────────────────────────
+function openNewModal() {
+  document.getElementById('newModal').classList.add('open');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+document.getElementById('newModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal('newModal');
+});
+
+async function submitNewCase() {
+  const company = document.getElementById('new_company').value.trim();
+  const scope   = document.getElementById('new_scope').value.trim();
+  if (!company || !scope) { toast('의뢰사와 의뢰 내용은 필수입니다', 'err'); return; }
+
+  const payload = {
+    company,
+    contact_person: document.getElementById('new_contact_person').value.trim(),
+    scope,
+    contact_type:   document.getElementById('new_contact_type').value,
+    duration:       document.getElementById('new_duration').value,
+    materials:      document.getElementById('new_materials').value.trim(),
+    note:           document.getElementById('new_note').value.trim(),
+    owner:          currentActor(),
+    status:         'received',
+    progress:       0,
+  };
+
+  setSyncState('syncing', '등록 중…');
+  try {
+    const res = await apiPost('saveCase', payload);
+    if (res.error) throw new Error(res.error);
+
+    // 최초 이력 자동 추가
+    await apiPost('appendHistory', {
+      caseId: res.case.case_id,
+      step:   '의뢰 수신',
+      actor:  currentActor(),
+      date:   new Date().toISOString().slice(0,10)
+    });
+
+    cases.push(res.case);
+    localStorage.setItem('eurofins.cases', JSON.stringify(cases));
+    renderList();
+    updateStats();
+    closeModal('newModal');
+    selectCase(res.case.case_id);
+    setSyncState('ok', '등록됨');
+    toast('새 상담이 등록되었습니다', 'ok');
+
+    // 폼 초기화
+    ['new_company','new_contact_person','new_scope','new_materials','new_note'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('new_contact_type').value = '';
+    document.getElementById('new_duration').value = '';
+  } catch (e) {
+    setSyncState('err', '오류');
+    toast('등록 실패: ' + e.message, 'err');
+  }
+}
+
+// ────────────────────────────────────────────
+// 9. 유틸
+// ────────────────────────────────────────────
+function esc(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toast(msg, type='') {
+  const wrap = document.getElementById('toastWrap');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ────────────────────────────────────────────
+// 10. 초기 로드
+// ────────────────────────────────────────────
+// 오프라인 캐시 먼저 표시
+const cached = localStorage.getItem('eurofins.cases');
+if (cached) {
+  try {
+    cases = JSON.parse(cached);
+    renderList();
+    updateStats();
+    setSyncState('ok', '캐시 로드');
+  } catch (_) {}
+}
+
+// 서버와 동기화
+loadCases();
+
+// 60초마다 자동 폴링
+setInterval(loadCases, 60000);
+</script>
+</body>
+</html>
